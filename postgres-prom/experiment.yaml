@@ -1,0 +1,66 @@
+apiVersion: redskyops.dev/v1alpha1
+kind: Experiment
+metadata:
+  name: postgres-prometheus-sales-demo
+spec:
+  optimization:
+  - name: "experimentBudget"
+    value: "40" #number of trials
+  parameters:
+  - name: memory
+    min: 500
+    max: 4000
+  - name: cpu
+    min: 100
+    max: 4000
+  metrics:
+  - name: cpu_utilization
+    type: prometheus
+    query: '{{cpuUtilization . "component=postgres"}}'
+    selector:
+      matchLabels:
+        app: prometheus
+  - name: mem_utilization
+    type: prometheus
+    query: '{{memoryUtilization . "component=postgres"}}'
+    selector:
+      matchLabels:
+        app: prometheus
+  patches:
+  - targetRef:
+      kind: Deployment
+      apiVersion: apps/v1
+      name: postgres
+    patch: |
+      spec:
+        template:
+          spec:
+            containers:
+            - name: postgres
+              resources:
+                limits:
+                  cpu: "{{ .Values.cpu }}m"
+                  memory: "{{ .Values.memory }}Mi"
+                requests:
+                  cpu: "{{ .Values.cpu }}m"
+                  memory: "{{ .Values.memory }}Mi"
+  template: # trial
+   spec:
+    setupTasks:
+    - name: monitoring
+      args:
+      - prometheus
+      - $(MODE)
+    setupServiceAccountName: promsetup
+    spec:
+      initialDelaySeconds: 15
+      template: # job
+        spec:
+          template: # pod
+            spec:
+              containers:
+              - image: crunchydata/crunchy-pgbench:centos7-11.4-2.4.1
+                name: pgbench
+                envFrom:
+                - secretRef:
+                    name: postgres-secret
