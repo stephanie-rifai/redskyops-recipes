@@ -7,15 +7,19 @@ spec:
   - name: voting_cpu
     min: 200
     max: 2000
+    baseline: 1000
   - name: min_replicas
     min: 1
     max: 8
+    baseline: 1
   - name: max_replicas
     min: 1
     max: 8
+    baseline: 8
   - name: avg_utilization
     min: 10
     max: 80
+    baseline: 70
   constraints:
     - order:
         lowerParameter: min_replicas
@@ -24,7 +28,19 @@ spec:
   - name: latency
     minimize: true
     type: jsonpath
+    max: "1000" # max latency allowed
     query: '{.stats[0].avg_response_time}'
+    path: '/stats/requests'
+    port: 8089
+    selector:
+      matchLabels:
+        component: locust
+  - name: error_rate
+    minimize: true
+    optimize: false # metric will be collected but not optimized for
+    max: "2" # max error rate allowed
+    type: jsonpath
+    query: "{{ mul (div {.stats[0].num_failures} {.stats[0].num_requests}) 100 }}"
     path: '/stats/requests'
     port: 8089
     selector:
@@ -110,17 +126,7 @@ spec:
                     configMapKeyRef:
                       name: trialjob-env
                       key: run_time
-                - name: MAX_LATENCY # max avg latency in ms
-                  valueFrom:
-                    configMapKeyRef:
-                      name: trialjob-env
-                      key: max_latency
-                - name: MAX_ERROR_RATE # max error rate in %
-                  valueFrom:
-                    configMapKeyRef:
-                      name: trialjob-env
-                      key: max_error_rate
-                volumeMounts:
+                    volumeMounts:
                 - name: locust-load-test
                   mountPath: /home/load_test.py
                   subPath: load_test.py
